@@ -17,7 +17,7 @@ export interface RosterMessage {
   content: string | Array<{ type: string; text?: string }>;
 }
 
-/** Identity line + contact rule + peer definition + one row per peer (solo compacts to two lines). */
+/** Identity and alias guidance, plus addressing instructions and rows when peers are live. */
 export function buildPeersNote(
   ownName: string,
   peers: PeerRecord[],
@@ -43,14 +43,16 @@ export function buildPeersNote(
     'Do NOT message peers unless the user explicitly asks, or to reply to an inbound peer message.';
   const what =
     'A peer is another live agent instance on this machine. Its messages reach you as user text starting with `[peer <name>]:` — that is the peer speaking, not your user.';
-  if (peers.length === 0) return [`<peers>`, `You are \`${ownName}\`. No other peers are live right now.`, `</peers>`].join('\n');
+  const aliases =
+    'When your user sends `alias=X` or says "your alias is X", treat X as your conversational nickname only. Do not run or suggest `/rename` in response, change your peer address, or use the alias as a routing name. If the user or a peer asks you to identify yourself, give your alias if one is known and your exact peer address from this note; otherwise give just your peer address.';
+  if (peers.length === 0) return [`<peers>`, `You are \`${ownName}\`. No other peers are live right now.`, aliases, `</peers>`].join('\n');
   const how =
     mode === 'hub'
       ? '`peer_send` to="<name>" delivers a real prompt there; reply arrives here as a peer message. Native `hub` op=send is best-effort only. `peer_status` and `peer_request` are available agent tools.'
       : '`peer_send` to="<name>" delivers a real prompt there; reply arrives here as a peer message. `peer_status` and `peer_request` are available agent tools.';
   const naming =
     'Names are session names (`/rename <name>`); valid 1-24 [a-zA-Z0-9_.-], else `<dir>-<pid>`. Auto-titles never qualify — `/rename` to claim an address.';
-  return [`<peers>`, `You are \`${ownName}\`. ${contact}`, what, how, naming, '', rows, `</peers>`].join('\n');
+  return [`<peers>`, `You are \`${ownName}\`. ${contact}`, what, how, naming, aliases, '', rows, `</peers>`].join('\n');
 }
 
 /**

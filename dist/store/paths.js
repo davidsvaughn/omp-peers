@@ -10,6 +10,9 @@
  *   <state>/peers/<pid>.json      owner-only presence records (0600)
  *   <state>/peers/<pid>.sock      unix sockets (non-Windows only)
  */
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { chmod, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +30,19 @@ export function resolveStateDir() {
         return join(stripTrailingSeparators(localAppData), 'omp-peers');
     }
     return join(homedir(), '.omp', 'var', 'omp-peers');
+}
+/** Isolate discovery and listening sockets by checkout, or launch directory outside Git. */
+export function projectStateDir(cwd) {
+    let root = realpathSync(cwd);
+    try {
+        root = realpathSync(execFileSync('git', ['rev-parse', '--show-toplevel'], {
+            cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+        }).replace(/\r?\n$/, ''));
+    }
+    catch {
+        // Without a Git worktree, use the narrower directory scope.
+    }
+    return join(resolveStateDir(), createHash('sha256').update(root).digest('hex').slice(0, 32));
 }
 /** Directory holding one `<pid>.json` presence record per live peer. */
 export function peersDir(stateDir = resolveStateDir()) {

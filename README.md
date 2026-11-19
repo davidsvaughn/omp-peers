@@ -1,6 +1,6 @@
 # omp-peers
 
-**Cross-session peer awareness for [Oh My Pi](https://github.com/can1357/oh-my-pi) and pi** — every running agent instance sees every other, live, by name. No channels, no pairing ceremony, no broker process.
+**Cross-session peer awareness for [Oh My Pi](https://github.com/can1357/oh-my-pi) and pi.** This installation scopes peer discovery and delivery to one Git worktree (the canonical working directory outside Git). Separate checkouts do not share peers, even when their directory names match. Restart existing sessions after upgrading from the machine-wide registry. This is routing isolation, not a sandbox against other programs running as your OS user.
 
 ```text
 /peers                      main-peer · omp(12776) · C:\work\api · glm-5.3-flash · idle · beat 3s ago
@@ -8,7 +8,7 @@
 peer_send to="backend" ...  injects a real prompt into that instance's agent
 ```
 
-**What an agent actually sees, every prompt** — the injected `<peers>` roster note (solo prompts compact to the first line):
+**What an agent actually sees, every prompt** — the injected `<peers>` roster note (solo prompts keep the agent's address and alias guidance but omit peer rows):
 
 ```text
 <peers>
@@ -16,6 +16,7 @@ You are `main-peer`. Do NOT message peers unless the user explicitly asks, or to
 A peer is another live agent instance on this machine. Its messages reach you as user text starting with `[peer <name>]:` — that is the peer speaking, not your user.
 `peer_send` to="<name>" delivers a real prompt there; reply arrives here as a peer message. `peer_status` and `peer_request` are available agent tools.
 Names are session names (`/rename <name>`); valid 1-24 [a-zA-Z0-9_.-], else `<dir>-<pid>`. Auto-titles never qualify — `/rename` to claim an address.
+When your user sends `alias=X` or says "your alias is X", treat X as your conversational nickname only. Do not run or suggest `/rename` in response, change your peer address, or use the alias as a routing name. If the user or a peer asks you to identify yourself, give your alias if one is known and your exact peer address from this note; otherwise give just your peer address.
 
 - `test-peer` — omp(34532) in C:\work\any (idle)
 </peers>
@@ -25,6 +26,7 @@ Names are session names (`/rename <name>`); valid 1-24 [a-zA-Z0-9_.-], else `<di
 
 - **Install = opt-in.** Every omp/pi instance with the plugin loaded announces itself to a machine-global state dir and shows up in everyone's `/peers`. No join/leave commands, no channels.
 - **Peer name = session name.** Rename a session with the host's builtin `/rename <name>`; the peer address follows within seconds — even while everything is running, and across restarts. First-wins collision handling: if two instances take the same name, the older keeps it and the younger is addressable as `<name>-<pid>`.
+- **Alias ≠ peer address.** Send `alias=Sol` in chat, or say “your alias is Sol.” `/peers` shows the shorthand. It does not register a routing name or store separate session metadata. On request, the agent identifies itself with the nickname, if known, and its exact peer address.
 - **The agent always knows itself.** Every prompt carries a `<peers>` roster note — own peer name, every live peer (name · pid · cwd · busy/idle), and the addressing guide. Ask an agent "who are your peers?" and it can answer and act.
 
 Typical split — run one instance per role and let them coordinate:

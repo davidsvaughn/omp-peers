@@ -12,6 +12,7 @@
  * coalescing (N frames in one window cost one wake, not N).
  */
 
+import { createHash } from 'node:crypto';
 import { createConnection, createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import { rm } from 'node:fs/promises';
@@ -32,7 +33,7 @@ export const MAX_FRAME_BYTES = 1_048_576;
 
 /** Where this peer listens (and where others reach it). */
 export function peerSocketAddress(stateDir: string, pid: number): string {
-  if (process.platform === 'win32') return `\\\\.\\pipe\\peers-${pid}`;
+  if (process.platform === 'win32') return `\\\\.\\pipe\\peers-${createHash('sha256').update(stateDir).digest('hex').slice(0, 32)}-${pid}`;
   return `${peersDir(stateDir)}/${pid}.sock`;
 }
 

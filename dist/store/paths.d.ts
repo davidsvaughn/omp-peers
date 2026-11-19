@@ -12,6 +12,8 @@
  */
 /** Resolve the machine-global state dir from the environment. */
 export declare function resolveStateDir(): string;
+/** Isolate discovery and listening sockets by checkout, or launch directory outside Git. */
+export declare function projectStateDir(cwd: string): string;
 /** Directory holding one `<pid>.json` presence record per live peer. */
 export declare function peersDir(stateDir?: string): string;
 /** Presence record for one peer pid (single writer: the owning process). */

@@ -200,13 +200,9 @@ export function registerPeerRequestTool(pi: ExtensionHostLike, deps: PeerRequest
         return { content: [{ type: 'text', text: 'peers not started.' }] };
       }
 
-      let resolve!: (body: string) => void;
-      let reject!: (err: Error) => void;
-      const promise = new Promise<string>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      pending.set(replyTo, { resolve, reject });
+      // Shutdown can settle this waiter while send() still awaits its receipt.
+      const { promise, resolve } = Promise.withResolvers<string | Error>();
+      pending.set(replyTo, { resolve, reject: resolve });
 
       try {
         const receipt = await deps.send(to, message, {
@@ -226,7 +222,6 @@ export function registerPeerRequestTool(pi: ExtensionHostLike, deps: PeerRequest
           // Not a queueable delivery — e.g. unknown peer, refused, or it
           // matched a pending request on the far end and was consumed.
           pending.delete(replyTo);
-          reject(new Error('not delivered'));
           return { content: [{ type: 'text', text: receipt }] };
         }
 
@@ -234,6 +229,7 @@ export function registerPeerRequestTool(pi: ExtensionHostLike, deps: PeerRequest
           // A very fast reply already arrived and resolved before sendToPeer
           // returned; the promise is already resolved.
           const body = await promise;
+          if (body instanceof Error) throw body;
           return { content: [{ type: 'text', text: `Reply from ${to}: ${body}` }] };
         }
 
@@ -241,11 +237,12 @@ export function registerPeerRequestTool(pi: ExtensionHostLike, deps: PeerRequest
         entry.timer = setTimeout(() => {
           if (pending.has(replyTo)) {
             pending.delete(replyTo);
-            reject(new Error('timeout'));
+            resolve(new Error('timeout'));
           }
         }, timeoutMs);
 
         const body = await promise;
+        if (body instanceof Error) throw body;
         return { content: [{ type: 'text', text: `Reply from ${to}: ${body}` }] };
       } catch (err) {
         pending.delete(replyTo);

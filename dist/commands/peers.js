@@ -6,6 +6,7 @@
  * live ctx and invoked as a receiver method.
  */
 import { formatBeatAge } from '../peers/presence.js';
+const ALIAS_HINT = 'Send alias=X in chat to set a nickname; your peer address stays the same.';
 /** `backend · omp(1234) · C:\work · model-id · working · beat 3s ago`. */
 export function formatPeerLine(p, now, selfName) {
     const self = p.name === selfName ? ' · you' : '';
@@ -20,7 +21,8 @@ export function formatPeersText(snap, now) {
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((p) => formatPeerLine(p, now, snap.ownName));
     const header = `peers (${snap.peers.length}) — you are \`${snap.ownName}\` via ${snap.mode === 'hub' ? 'hub bridge' : 'peer tools'}${(snap.held ?? 0) > 0 ? ` · held ${snap.held}` : ''}`;
-    return lines.length === 0 ? `${header} — no peers` : `${header}\n${lines.join('\n')}`;
+    lines.push(ALIAS_HINT);
+    return `${header}${snap.peers.length === 0 ? ' — no peers' : ''}\n${lines.join('\n')}`;
 }
 export function registerPeersCommand(pi, getSnapshot) {
     pi.registerCommand('peers', {
@@ -31,7 +33,7 @@ export function registerPeersCommand(pi, getSnapshot) {
                 const select = ctx.ui?.select;
                 if (typeof select === 'function' && ctx.mode === 'tui' && snap.peers.length > 0) {
                     try {
-                        const picked = await select.call(ctx.ui, 'Peers — pick one for details', [...snap.peers]
+                        const picked = await select.call(ctx.ui, `Peers — pick one for details. ${ALIAS_HINT}`, [...snap.peers]
                             .sort((a, b) => a.name.localeCompare(b.name))
                             .map((p) => ({
                             label: p.name,

@@ -46,7 +46,7 @@ import { appendNoteToMessages, buildPeersNote } from './peers/roster.js';
 import type { RosterMessage } from './peers/roster.js';
 import { peerSocketAddress, requestPeer, startPeerServer } from './peers/server.js';
 import type { PeerServerHandle } from './peers/server.js';
-import { ensureStateDirs, resolveStateDir } from './store/paths.js';
+import { ensureStateDirs, projectStateDir } from './store/paths.js';
 import { registerPeerSendTool, registerPeerStatusTool, registerPeerRequestTool } from './tools.js';
 import type { PeerRecord, PeerTodo, PendingReply } from './types.js';
 
@@ -61,6 +61,7 @@ const ACTIVITY_FRESH_MS = 120_000;
 
 interface NodeState {
   stateDir: string;
+  cwd: string;
   pid: number;
   startedAt: number;
   socketAddress: string;
@@ -356,6 +357,12 @@ function armBeatTimer(st: NodeState, ctx: CommandContextLike): void {
 /** Get the live node, starting one if this process has none. Re-arms on every event. */
 function ensureNode(pi: ExtensionHostLike, ctx: CommandContextLike): NodeState | undefined {
   const existing = liveNode();
+  const cwd = ctx.cwd || process.cwd();
+  if (existing && existing.cwd !== cwd) {
+    node = undefined;
+    void stopNode(existing);
+    return ensureNode(pi, ctx);
+  }
   if (existing !== undefined) {
     existing.current = { pi, ctx };
     let sessionId = '';
@@ -368,9 +375,10 @@ function ensureNode(pi: ExtensionHostLike, ctx: CommandContextLike): NodeState |
     return existing;
   }
   try {
-    const stateDir = resolveStateDir();
+    const stateDir = projectStateDir(cwd);
     const st: NodeState = {
       stateDir,
+      cwd,
       pid: process.pid,
       startedAt: Date.now(),
       socketAddress: peerSocketAddress(stateDir, process.pid),
@@ -406,6 +414,7 @@ function ensureNode(pi: ExtensionHostLike, ctx: CommandContextLike): NodeState |
           ownName: () => liveNode()?.name ?? '',
           onMessage: async (msg) => {
             const live = liveNode();
+            if (live !== st) return 'dropped';
             if (
               live !== undefined &&
               msg.replyTo !== undefined &&
@@ -421,7 +430,7 @@ function ensureNode(pi: ExtensionHostLike, ctx: CommandContextLike): NodeState |
               return 'replied';
             }
             const res = await deliverInboundPeerMessage(msg, {
-              getCurrent: () => currentOf(),
+              getCurrent: () => liveNode() === st ? currentOf() : undefined,
               getDraftText: () => {
                 try {
                   const text = currentOf()?.ctx.ui.getEditorText?.() ?? '';

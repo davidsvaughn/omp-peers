@@ -172,13 +172,9 @@ export function registerPeerRequestTool(pi, deps) {
             if (pending === undefined) {
                 return { content: [{ type: 'text', text: 'peers not started.' }] };
             }
-            let resolve;
-            let reject;
-            const promise = new Promise((res, rej) => {
-                resolve = res;
-                reject = rej;
-            });
-            pending.set(replyTo, { resolve, reject });
+            // Shutdown can settle this waiter while send() still awaits its receipt.
+            const { promise, resolve } = Promise.withResolvers();
+            pending.set(replyTo, { resolve, reject: resolve });
             try {
                 const receipt = await deps.send(to, message, {
                     ownName: deps.ownName(),
@@ -194,23 +190,26 @@ export function registerPeerRequestTool(pi, deps) {
                     // Not a queueable delivery — e.g. unknown peer, refused, or it
                     // matched a pending request on the far end and was consumed.
                     pending.delete(replyTo);
-                    reject(new Error('not delivered'));
                     return { content: [{ type: 'text', text: receipt }] };
                 }
                 if (!pending.has(replyTo)) {
                     // A very fast reply already arrived and resolved before sendToPeer
                     // returned; the promise is already resolved.
                     const body = await promise;
+                    if (body instanceof Error)
+                        throw body;
                     return { content: [{ type: 'text', text: `Reply from ${to}: ${body}` }] };
                 }
                 const entry = pending.get(replyTo);
                 entry.timer = setTimeout(() => {
                     if (pending.has(replyTo)) {
                         pending.delete(replyTo);
-                        reject(new Error('timeout'));
+                        resolve(new Error('timeout'));
                     }
                 }, timeoutMs);
                 const body = await promise;
+                if (body instanceof Error)
+                    throw body;
                 return { content: [{ type: 'text', text: `Reply from ${to}: ${body}` }] };
             }
             catch (err) {

@@ -11,6 +11,7 @@
  * past a human prompt is refused, never relayed) and 400ms per-sender burst
  * coalescing (N frames in one window cost one wake, not N).
  */
+import { createHash } from 'node:crypto';
 import { createConnection, createServer } from 'node:net';
 import { rm } from 'node:fs/promises';
 import { peersDir } from '../store/paths.js';
@@ -27,7 +28,7 @@ export const MAX_FRAME_BYTES = 1_048_576;
 /** Where this peer listens (and where others reach it). */
 export function peerSocketAddress(stateDir, pid) {
     if (process.platform === 'win32')
-        return `\\\\.\\pipe\\peers-${pid}`;
+        return `\\\\.\\pipe\\peers-${createHash('sha256').update(stateDir).digest('hex').slice(0, 32)}-${pid}`;
     return `${peersDir(stateDir)}/${pid}.sock`;
 }
 // Hop is sender-reported: it bounds honest relay chains, not forged ones.

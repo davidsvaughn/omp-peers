@@ -22,6 +22,8 @@
  * Plain Node ESM — no test-runner dependency (also runs under `node --test`).
  */
 
+import { execFileSync } from 'node:child_process';
+import { projectStateDir } from '../dist/store/paths.js';
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -712,6 +714,7 @@ describe('peer name follows the host session name (tick level)', () => {
   let sessionName;
   let sessionId = 'sess-tick-1';
   const fakePi = {
+    sendUserMessage: () => {},
     registerCommand: () => {},
     registerTool: () => {},
     on: (event, handler) => { handlers[event] = handler; },
@@ -726,7 +729,7 @@ describe('peer name follows the host session name (tick level)', () => {
 
   async function waitForOwnBeat(expectedName) {
     for (let i = 0; i < 100; i += 1) {
-      const live = await listLivePeers(STATE, 0, { isAlive: ALIVE });
+      const live = await listLivePeers(projectStateDir(fakeCtx.cwd), 0, { isAlive: ALIVE });
       const rec = live.find((p) => p.pid === process.pid);
       if (rec !== undefined && rec.name === expectedName) return rec;
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -735,6 +738,8 @@ describe('peer name follows the host session name (tick level)', () => {
   }
 
   it('beats under the session name; warns once per process', async () => {
+    await mkdir(fakeCtx.cwd);
+    execFileSync('git', ['init', '-q', fakeCtx.cwd]);
     const peersExtension = (await import('../dist/extension.js')).default;
     peersExtension(fakePi);
 
@@ -743,6 +748,15 @@ describe('peer name follows the host session name (tick level)', () => {
     const adopted = await waitForOwnBeat('test-peer');
     assert.equal(adopted.name, 'test-peer');
 
+    const nested = join(fakeCtx.cwd, 'subdir');
+    await mkdir(nested);
+    const foreign = join(STATE, 'other', 'tickproj');
+    await mkdir(foreign, { recursive: true });
+    const sendFrom = (cwd) => sendToPeer('test-peer', 'scope check', {
+      ownName: 'scope-test', listPeers: () => listLivePeers(projectStateDir(cwd), 0),
+    });
+    assert.match(await sendFrom(foreign), /Unknown peer/);
+    assert.match(await sendFrom(nested), /Delivered to test-peer/);
     sessionName = 'Fix the login bug later';
     sessionId = 'sess-tick-2';
     handlers['session_switch'](undefined, fakeCtx);
@@ -1119,6 +1133,19 @@ describe('activity, todos, and request/reply tools', () => {
     entry.resolve('hi back');
     const res = await executePromise;
     assert.match(res.content[0].text, /Reply from beta: hi back/);
+  });
+
+  it('returns an undelivered request receipt without an unhandled rejection', async () => {
+    const pending = new Map();
+    let request;
+    registerPeerRequestTool({ registerTool: def => { request = def; } }, {
+      ownName: () => 'local', getHop: () => 0, listPeers: async () => [],
+      getPendingReplies: () => pending, send: sendToPeer,
+    });
+    const result = await request.execute('id', { to: 'absent', message: 'hello' });
+    assert.match(result.content[0].text, /Unknown peer "absent"/);
+    assert.equal(pending.size, 0);
+    await new Promise(resolve => setImmediate(resolve));
   });
 
   it('peer_request times out with a peer_status hint', async () => {
